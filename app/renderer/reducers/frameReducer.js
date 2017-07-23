@@ -16,7 +16,6 @@ const appActions = require('../../../js/actions/appActions')
 
 // Utils
 const frameStateUtil = require('../../../js/state/frameStateUtil')
-const {getCurrentWindowId} = require('../currentWindow')
 const {getSourceAboutUrl, getSourceMagnetUrl} = require('../../../js/lib/appUrlUtil')
 const {isURL, isPotentialPhishingUrl, getUrlFromInput} = require('../../../js/lib/urlutil')
 const bookmarkUtil = require('../../common/lib/bookmarkUtil')
@@ -41,15 +40,13 @@ const closeFrame = (state, action) => {
 
   state = state.merge(frameStateUtil.removeFrame(
     state,
-    frameProps.set('closedAtIndex', index),
+    frameProps
+      .set('closedAtIndex', index)
+      .delete('openerTabId'),
     index
   ))
   state = frameStateUtil.deleteFrameInternalIndex(state, frameProps)
   state = frameStateUtil.updateFramesInternalIndex(state, index)
-
-  if (state.get('frames', Immutable.List()).size === 0) {
-    appActions.closeWindow(getCurrentWindowId())
-  }
 
   const nextFrame = frameStateUtil.getFrameByIndex(state, index)
 
@@ -95,6 +92,17 @@ const frameReducer = (state, action, immutableAction) => {
       const frame = frameStateUtil.getFrameByTabId(state, tabId)
       if (!frame) {
         break
+      }
+
+      const changeInfoIndex = changeInfo.get('index')
+      if (changeInfoIndex !== undefined) {
+        const sourceFrameIndex = frameStateUtil.getFrameIndex(state, frame.get('key'))
+        let frames = state.get('frames').splice(sourceFrameIndex, 1)
+        frames = frames.splice(changeInfoIndex, 0, frame)
+        state = state.set('frames', frames)
+        // Since the tab could have changed pages, update the tab page as well
+        state = frameStateUtil.updateFramesInternalIndex(state, changeInfoIndex)
+        state = frameStateUtil.moveFrame(state, tabId, changeInfoIndex)
       }
 
       const index = frameStateUtil.getIndexByTabId(state, tabId)
