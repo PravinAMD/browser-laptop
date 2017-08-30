@@ -50,7 +50,7 @@ if (isDarwin) {
   }
 
   const wvInput = buildDir + '/Brave.app/Contents/MacOS/Brave'
-  const wvOutput = buildDir + '/Brave.app/Contents/MacOS/BraveSigned'
+//  const wvOutput = buildDir + '/Brave.app/Contents/MacOS/BraveSigned'
 
   cmds = [
     // Remove old
