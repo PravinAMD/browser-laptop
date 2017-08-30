@@ -19,12 +19,38 @@ const buildDir = 'Brave-' + process.platform + '-' + arch
 
 console.log('Building install and update for version ' + VersionInfo.braveVersion + ' in ' + buildDir + ' with Electron ' + VersionInfo.electronVersion)
 
+const raiseError = (errorMessage) => {
+  console.error(errorMessage)
+  process.exit(1)
+}
+
+if (isDarwin || isWindows) {
+  const requiredText = 'is required for widevine signing'
+  if (!process.env.SIGN_WIDEVINE_PASSPHRASE) {
+    raiseError('SIGN_WIDEVINE_PASSPHRASE ' + requiredText)
+  }
+  if (!process.env.SIGN_WIDEVINE_CERT) {
+    raiseError('SIGN_WIDEVINE_CERT ' + requiredText)
+  }
+  if (!process.env.SIGN_WIDEVINE_KEY) {
+    raiseError('SIGN_WIDEVINE_KEY ' + requiredText)
+  }
+
+  // check if widevine script exists
+  const fs = require('fs')
+  if (!fs.existsSync('tools/signature_generator.py')) {
+    raiseError('`tools/signature_generator.py` ' + requiredText)
+  }
+}
+
 if (isDarwin) {
   const identifier = process.env.IDENTIFIER
   if (!identifier) {
-    console.error('IDENTIFIER needs to be set to the certificate organization')
-    process.exit(1)
+    raiseError('IDENTIFIER needs to be set to the certificate organization')
   }
+
+  const wvInput = buildDir + '/Brave.app/Contents/MacOS/Brave'
+  const wvOutput = buildDir + '/Brave.app/Contents/MacOS/BraveSigned'
 
   cmds = [
     // Remove old
@@ -36,8 +62,11 @@ if (isDarwin) {
     'cd ../../..',
     'codesign --deep --force --strict --verbose --sign $IDENTIFIER Brave.app/',
 
-    // Package it into a dmg
+    // sign for widevine
     'cd ..',
+    'python tools/signature_generator.py --input_file ' + wvInput, // + ' --output_file ' + wvOutput,
+
+    // Package it into a dmg
     'build ' +
       '--prepackaged="' + buildDir + '/Brave.app" ' +
       '--mac=dmg ' +
@@ -53,7 +82,7 @@ if (isDarwin) {
   var cert = process.env.CERT || '../brave-authenticode.pfx'
   var certPassword = process.env.CERT_PASSWORD
   if (!certPassword) {
-    throw new Error('Certificate password required. Set environment variable CERT_PASSWORD.')
+    raiseError('Certificate password required. Set environment variable CERT_PASSWORD.')
   }
 
   // Because both x64 and ia32 creates a RELEASES and a .nupkg file we
@@ -100,13 +129,11 @@ if (isDarwin) {
   ]
   execute(cmds, {}, (err) => {
     if (err) {
-      console.error('buildInstaller failed', err)
-      process.exit(1)
+      raiseError('buildInstaller failed' + JSON.stringify(err))
       return
     }
     console.log('done')
   })
 } else {
-  console.log('Installer not supported for platform: ' + process.platform)
-  process.exit(1)
+  raiseError('Installer not supported for platform: ' + process.platform)
 }
